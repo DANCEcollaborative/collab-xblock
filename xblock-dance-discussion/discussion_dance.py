@@ -141,6 +141,19 @@ class DiscussionDance(XBlock):
         else:
             return {'fetch_status': ret_val, 'db_data': "No data"}
 
+    @XBlock.json_handler
+    def get_asset(self, data, suffix=''):
+        """
+        This handler is used to fetch assets (HTML with embedded CSS/JS).
+        """
+        error = ''
+        html = ''
+        try:
+            html = DiscussionDance.resource_string('./static/html/' + data.get('asset'))
+        except:
+            error = DiscussionDance.get_error_msg()
+        return{'asset': html, 'error': error}
+
     @staticmethod
     def setup_db():
         config_file = open(DiscussionDance.config_file_path, 'r')
@@ -165,8 +178,6 @@ class DiscussionDance(XBlock):
         """
         create_query = (DiscussionDance.resource_string("./discussion_setup.sql"))
         DiscussionDance.exec_query(create_query, "Creating Table")
-        test_query = ("INSERT INTO discussion_table (thread_id, user_id, comment, parent_id) VALUES (1, 11, 'Akash made this comment via XBlock', 1)")
-        DiscussionDance.exec_query(test_query, "Inserting test value")
 
     def student_view(self, context):
         """
