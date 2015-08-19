@@ -33,32 +33,29 @@ class DiscussionDance(XBlock):
     db = None #This is the DB connection. WE NEED TO ENSURE THIS IS CLOSED!
     last_poll_id = -1
 
-    @staticmethod
-    def resource_string(path):
+    def resource_string(self, path):
         """Handy helper for getting resources from our kit."""
         data = pkg_resources.resource_string(__name__, path)
         return data.decode("utf8")
 
-    @staticmethod
-    def get_error_msg():
+    def get_error_msg(self):
         return(str(sys.exc_info()[0]) + " " + str(sys.exc_info()[1]))
 
-    @staticmethod
-    def exec_query(query, prefix_msg = ""):
+    def exec_query(self, query, prefix_msg = ""):
         cursor = DiscussionDance.db.cursor()
         ret_val = 0
         try:
             cursor.execute(query)
         except:
-            print(prefix_msg + " Error :" + DiscussionDance.get_error_msg()) # PROBABLY NEED TO REPLACE THIS WITH A LOGGING STATEMENT!
+            print(prefix_msg + " Error :" + self.get_error_msg()) # PROBABLY NEED TO REPLACE THIS WITH A LOGGING STATEMENT!
+            #Currently, this print statement will print out the workbench server console. This may not happen fo hte EdX server
             ret_val = 1
         else:
             DiscussionDance.db.commit()
         cursor.close()
         return ret_val
 
-    @staticmethod
-    def get_all_data(cursor):
+    def get_all_data(self, cursor):
         ret_val = "Success"
         try:
             cursor.execute("SELECT * FROM discussion_table")
@@ -66,6 +63,8 @@ class DiscussionDance(XBlock):
             ret_val = " Error in fetch " + str(e) # PROBABLY NEED TO REPLACE THIS WITH A LOGGING STATEMENT!
         return ret_val
 
+    def format_row(self, row):
+        return (str(row[0]), str(row[1]), row[2].decode("utf-8"), row[3].decode("utf-8"), str(row[4]), str(row[5]))
 
     @XBlock.json_handler
     def post_comment(self, data, suffix=''):
@@ -73,7 +72,7 @@ class DiscussionDance(XBlock):
         ajax_comment = data.get('comment')
         """
         The ajax supplied comment may have ' (apostrophe/single quote) embedded in it. These must be escaped before
-        being put into the SQL query (which itself relies on single qutes when inserting strings).
+        being put into the SQL query (which itself relies on single quotes when inserting strings).
         """
         safe_comment = ""
         for char in ajax_comment:
@@ -82,17 +81,37 @@ class DiscussionDance(XBlock):
             else:
                 safe_comment +="\\'" #Escaping the embedded single quote using a single \. We use \\ to escape it in python as well
                 #ALSO CHECK DOUBLE QUOTES AND WILDCARD CHARACTER CASES!!!
-        insert_query = ("INSERT INTO discussion_table (thread_id, user_id, comment, parent_id) VALUES (2, 22, '" + safe_comment + "', 2)")
+        insert_query = ("INSERT INTO discussion_table (thread_id, user_id, comment, parent_id) VALUES (2, 22, '" + safe_comment + "', -1)")
         "NOTE: THERE IS A PROBLEM HERE. If the comment has any single quotes in it, then then query will become invalid. Single quotes need to be safely escaped!"
-        ret_val = DiscussionDance.exec_query(insert_query,"Inserting user comment")
+        ret_val = self.exec_query(insert_query,"Inserting user comment")
         if(ret_val == 0):
             return {'update_status': "Success"}
         else:
             return {'update_status': "Failure"}
 
-    @staticmethod
-    def format_row(self, row):
-        return (str(row[0]), str(row[1]), row[2].decode("utf-8"), row[3].decode("utf-8"), str(row[4]), str(row[5]))
+    @XBlock.json_handler
+    def post_reply(self, data, suffix=''):
+        #IT MIGHT BE BETTER TO MAINTAIN THE PRIMARY KEYS than rely on SQL auto increment since it is hard to back the primary key.
+        ajax_reply = data.get('comment')
+        ajax_parent = data.get('parent_id')
+        """
+        The ajax supplied comment may have ' (apostrophe/single quote) embedded in it. These must be escaped before
+        being put into the SQL query (which itself relies on single quotes when inserting strings).
+        """
+        safe_comment = ""
+        for char in ajax_reply:
+            if (char != "'"):
+                safe_comment += char
+            else:
+                safe_comment +="\\'" #Escaping the embedded single quote using a single \. We use \\ to escape it in python as well
+                #ALSO CHECK DOUBLE QUOTES AND WILDCARD CHARACTER CASES!!!
+        insert_query = ("INSERT INTO discussion_table (thread_id, user_id, comment, parent_id) VALUES (2, 22, '" + safe_comment + "', " + ajax_parent + " )")
+        "NOTE: THERE IS A PROBLEM HERE. If the comment has any single quotes in it, then then query will become invalid. Single quotes need to be safely escaped!"
+        ret_val = self.exec_query(insert_query,"Inserting user comment")
+        if(ret_val == 0):
+            return {'update_status': "Success"}
+        else:
+            return {'update_status': "Failure"}
 
     @XBlock.json_handler
     def get_db(self, data, suffix=''):
@@ -101,7 +120,7 @@ class DiscussionDance(XBlock):
         being put into the SQL query (which itself relies on single quotes when inserting strings).
         """
         cursor = DiscussionDance.db.cursor()
-        ret_val = DiscussionDance.get_all_data(cursor)
+        ret_val = self.get_all_data(cursor)
         template = '"{0}" : {{ "comment_id" : "{0}", "thread_id" : "{1}", "user_id" : "{2}", "comment" : "{3}", "parent_id" : "{4}", "creation_date" : "{5}" }},'
         if(ret_val == "Success"):
             ret_data = "{"
@@ -110,9 +129,11 @@ class DiscussionDance(XBlock):
                 #Some fields are returned as byte arrays in python. These will have to be converted into strings using the decode function
                 #ret_data += str(row)[13:-4]
                 #NEED TO ADD COMMA, EXCEPT ON FIRST ITERATION
-                row_formatted = DiscussionDance.format_row(self, row)
+                row_formatted = self.format_row(row)
                 ret_data += template.format(*row_formatted)
             ret_data = ret_data[:-1] + "}"
+            if ret_data == "}":
+                ret_data = "{}"
             return {'fetch_status': ret_val, 'db_data': ret_data}
         else:
             return {'fetch_status': ret_val, 'db_data': "No data"}
@@ -125,7 +146,7 @@ class DiscussionDance(XBlock):
         being put into the SQL query (which itself relies on single quotes when inserting strings).
         """
         cursor = DiscussionDance.db.cursor()
-        ret_val = DiscussionDance.get_all_data(cursor)
+        ret_val = self.get_all_data(cursor)
         template = '"{0}" : {{ "comment_id" : "{0}", "thread_id" : "{1}", "user_id" : "{2}", "comment" : "{3}", "parent_id" : "{4}", "creation_date" : "{5}" }},'
         if(ret_val == "Success"):
             ret_data = "{"
@@ -134,7 +155,7 @@ class DiscussionDance(XBlock):
                 #Some fields are returned as byte arrays in python. These will have to be converted into strings using the decode function
                 #ret_data += str(row)[13:-4]
                 #NEED TO ADD COMMA, EXCEPT ON FIRST ITERATION
-                row_formatted = DiscussionDance.format_row(self, row)
+                row_formatted = self.format_row(row)
                 ret_data += template.format(*row_formatted)
             ret_data = ret_data[:-1] + "}"
             return {'fetch_status': ret_val, 'db_data': ret_data}
@@ -149,13 +170,12 @@ class DiscussionDance(XBlock):
         error = ''
         html = ''
         try:
-            html = DiscussionDance.resource_string('./static/html/' + data.get('asset'))
+            html = self.resource_string('./static/html/' + data.get('asset'))
         except:
-            error = DiscussionDance.get_error_msg()
+            error = self.get_error_msg()
         return{'asset': html, 'error': error}
 
-    @staticmethod
-    def setup_db():
+    def setup_db(self):
         config_file = open(DiscussionDance.config_file_path, 'r')
         #This path may not be known by the person configuring the file on the edx server
         config = dict()
@@ -176,8 +196,8 @@ class DiscussionDance(XBlock):
         granted access to it on the host specified) and whether warnings should raise exceptions (which will show up in
         lms logs.)
         """
-        create_query = (DiscussionDance.resource_string("./discussion_setup.sql"))
-        DiscussionDance.exec_query(create_query, "Creating Table")
+        create_query = (self.resource_string("./discussion_setup.sql"))
+        self.exec_query(create_query, "Creating Table")
 
     def student_view(self, context):
         """
@@ -187,12 +207,12 @@ class DiscussionDance(XBlock):
         Returns a `Fragment` object specifying the HTML, CSS, and JavaScript
         to display.
         """
-        DiscussionDance.setup_db()
-        html = DiscussionDance.resource_string('./static/html/student_view.html')
+        self.setup_db()
+        html = self.resource_string('./static/html/student_view.html')
         frag = Fragment(unicode(html).format(self=self,comment=self.comment))
-        css = DiscussionDance.resource_string('./static/css/discussion_dance.css')
+        css = self.resource_string('./static/css/discussion_dance.css')
         frag.add_css(unicode(css))
-        js = DiscussionDance.resource_string('./static/js/discussion_dance.js')
+        js = self.resource_string('./static/js/discussion_dance.js')
         frag.add_javascript(unicode(js))
         frag.initialize_js('discussion_dance')
         return frag

@@ -40,16 +40,24 @@
   transition: all 0.1s linear 0s;
 }
 
-#Post{
+.Post{
+  margin-top:-10px;
+  margin-right: auto;
   background-color: #6dccf1;
   background-image: linear-gradient(to bottom,#6dccf1,#38a8e5);
   margin: 10px;
 }
 
-#Clear{
+.Clear{
+  margin-top:-10px;
+  margin-right: auto;
   background-color: #B22222;
   background-image: linear-gradient(to bottom,#B22222,#8B0000);
   margin: 10px;
+}
+
+.reply{
+  margin-left: 50px;
 }
 
 .main_heading{
@@ -122,4 +130,8 @@
   display: list-item;
   margin-top: 20px;
   padding: 0px 10px;
+}
+
+.comment-box{
+
 }
