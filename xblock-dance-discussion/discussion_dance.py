@@ -7,7 +7,6 @@ import pkg_resources
 from xblock.fragment import Fragment
 import unicodedata
 import urllib3
-import ssl
 
 
 """

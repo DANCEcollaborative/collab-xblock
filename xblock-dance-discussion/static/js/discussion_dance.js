@@ -97,7 +97,7 @@ function discussion_dance(runtime, element)
                     //I am handling it here by temporarily spawning a reply box and waiting for the long poll update to
                     //construct the hierarchical representation.
 
-                    reply_box = get_remote_asset('reply_box.html');//Should probably fetch all of these and store as globals
+                    reply_box = get_remote_asset('https://raw.githubusercontent.com/DANCEcollaborative/collab-xblock/master/xblock-dance-discussion/static/html/reply_box.html');//Should probably fetch all of these and store as globals
                     //rather than make AJAX call each time.
 
                     long_poll_toggle = 0; //This will stop the recursive long poll calls. This is needed so that the UI
@@ -125,7 +125,7 @@ function discussion_dance(runtime, element)
 
     function update_ui(db_data)//asset name must include the extension of the asset
     {
-        var html_asset = get_remote_asset('comment_box.html');
+        var html_asset = get_remote_asset('https://raw.githubusercontent.com/DANCEcollaborative/collab-xblock/master/xblock-dance-discussion/static/html/comment_box.html');
         for(var comment_id in db_data)
         {
             append_comment_box(comment_id, db_data[comment_id.toString()], html_asset);
