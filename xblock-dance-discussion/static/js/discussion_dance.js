@@ -9,6 +9,31 @@ function discussion_dance(runtime, element)
     till response is received.
     */
 
+    function get_remote_asset(asset_name)//asset name must include the extension of the asset
+    {
+        var ret_asset = '';
+        $.ajax({
+            type: "POST",
+            url: runtime.handlerUrl(element, 'get_remote_asset'),
+            data: JSON.stringify({asset: asset_name}),
+            success: function(result)
+                    {
+                        if(result.error == '')
+                        {
+                            ret_asset = result.asset;
+                        }
+                        else
+                        {
+                            alert("Didn't work" + result.error);//should replace this with some form of logging
+                        }
+
+                    }
+        });
+        //alert('asset fetch complete!'); //for some reason this is needed!
+        return(ret_asset);
+
+    }
+
     function get_asset(asset_name)//asset name must include the extension of the asset
     {
         var ret_asset = '';
@@ -72,7 +97,7 @@ function discussion_dance(runtime, element)
                     //I am handling it here by temporarily spawning a reply box and waiting for the long poll update to
                     //construct the hierarchical representation.
 
-                    reply_box = get_asset('reply_box.html');//Should probably fetch all of these and store as globals
+                    reply_box = get_remote_asset('reply_box.html');//Should probably fetch all of these and store as globals
                     //rather than make AJAX call each time.
 
                     long_poll_toggle = 0; //This will stop the recursive long poll calls. This is needed so that the UI
@@ -100,7 +125,7 @@ function discussion_dance(runtime, element)
 
     function update_ui(db_data)//asset name must include the extension of the asset
     {
-        var html_asset = get_asset('comment_box.html');
+        var html_asset = get_remote_asset('comment_box.html');
         for(var comment_id in db_data)
         {
             append_comment_box(comment_id, db_data[comment_id.toString()], html_asset);

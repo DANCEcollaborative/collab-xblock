@@ -5,16 +5,23 @@ import sys
 import mysql.connector as db_connector
 import pkg_resources
 from xblock.fragment import Fragment
+import unicodedata
+import urllib3
+import ssl
 
 
 """
 TO DO:
+db_settings.py IS NOT COPIED TO THE XBLOCK INSTALL DIRECTORY by pip. SOLVE THIS!!
+    -Same goes for discussion_setup.sql and all static assets
+    -Currently both these files need to be copied to /edx/app/edxapp/venvs/edxapp/local/lib/python2.7/site-packages/
 Add exception handling for ALL database operations.
 Replace console prints with logging statements
 Separate out functions into their own modules (ex. All DB functions into a separate DB module)
 Add more documentation when possible
 #Conform to conventions (dance-discussion vs. discussion-dance for ids)
 #CHECK DOUBLE QUOTES AND WILDCARD CHARACTER CASES which may be embedded in the user comment supplied via Ajax
+Change the requirements file so that the mysql connector can be installed directly via pip using the requirements file
 
 """
 
@@ -32,11 +39,20 @@ class DiscussionDance(XBlock):
     comment = ''
     db = None #This is the DB connection. WE NEED TO ENSURE THIS IS CLOSED!
     last_poll_id = -1
+    login = None
+
+    @property
+    def student_id(self):
+        #return self.runtime.anonymous_student_id
+        return self.xmodule_runtime.anonymous_student_id
 
     def resource_string(self, path):
         """Handy helper for getting resources from our kit."""
         data = pkg_resources.resource_string(__name__, path)
         return data.decode("utf8")
+
+    def remote_resource_string(self, url):
+        return((urllib3.PoolManager()).request('GET', url).data)
 
     def get_error_msg(self):
         return(str(sys.exc_info()[0]) + " " + str(sys.exc_info()[1]))
@@ -75,12 +91,15 @@ class DiscussionDance(XBlock):
         being put into the SQL query (which itself relies on single quotes when inserting strings).
         """
         safe_comment = ""
+        #self.login = self.student_id()
+        #print("Login id is: " + self.login)
         for char in ajax_comment:
             if (char != "'"):
                 safe_comment += char
             else:
                 safe_comment +="\\'" #Escaping the embedded single quote using a single \. We use \\ to escape it in python as well
                 #ALSO CHECK DOUBLE QUOTES AND WILDCARD CHARACTER CASES!!!
+        #insert_query = ("INSERT INTO discussion_table (thread_id, user_id, comment, parent_id) VALUES (2, " + self.login + ", '" + safe_comment + "', -1)")
         insert_query = ("INSERT INTO discussion_table (thread_id, user_id, comment, parent_id) VALUES (2, 22, '" + safe_comment + "', -1)")
         "NOTE: THERE IS A PROBLEM HERE. If the comment has any single quotes in it, then then query will become invalid. Single quotes need to be safely escaped!"
         ret_val = self.exec_query(insert_query,"Inserting user comment")
@@ -170,14 +189,30 @@ class DiscussionDance(XBlock):
         error = ''
         html = ''
         try:
-            html = self.resource_string('./static/html/' + data.get('asset'))
+            html = self.resource_string('static/html/' + data.get('asset'))
+        except:
+            error = self.get_error_msg()
+        return{'asset': html, 'error': error}
+
+
+    @XBlock.json_handler
+    def get_remote_asset(self, data, suffix=''):
+        """
+        This handler is used to fetch assets (HTML with embedded CSS/JS).
+        """
+        error = ''
+        html = ''
+        try:
+            html = self.remote_resource_string(data.get('asset'))
         except:
             error = self.get_error_msg()
         return{'asset': html, 'error': error}
 
     def setup_db(self):
-        config_file = open(DiscussionDance.config_file_path, 'r')
+        #config_file = open(DiscussionDance.config_file_path, 'r')
         #This path may not be known by the person configuring the file on the edx server
+        config_file = self.resource_string("db_settings.txt")
+        config_file = config_file.strip(' \t').split('\n')
         config = dict()
         for line in config_file:
             (key, value) = line.strip(' \t\r\n').split(':', 1)
@@ -187,7 +222,7 @@ class DiscussionDance(XBlock):
                 config[str(key).strip()] = str(value).strip()
 
         print(config)
-        config_file.close()
+        #config_file.close()
 
         DiscussionDance.db = db_connector.connect(**config)
         """
@@ -196,7 +231,7 @@ class DiscussionDance(XBlock):
         granted access to it on the host specified) and whether warnings should raise exceptions (which will show up in
         lms logs.)
         """
-        create_query = (self.resource_string("./discussion_setup.sql"))
+        create_query = (self.resource_string("discussion_setup.sql"))
         self.exec_query(create_query, "Creating Table")
 
     def student_view(self, context):
@@ -207,12 +242,15 @@ class DiscussionDance(XBlock):
         Returns a `Fragment` object specifying the HTML, CSS, and JavaScript
         to display.
         """
+        js_url = 'https://raw.githubusercontent.com/DANCEcollaborative/collab-xblock/master/xblock-dance-discussion/static/js/discussion_dance.js'
+        css_url = 'https://raw.githubusercontent.com/DANCEcollaborative/collab-xblock/master/xblock-dance-discussion/static/css/discussion_dance.css'
+        html_url = 'https://raw.githubusercontent.com/DANCEcollaborative/collab-xblock/master/xblock-dance-discussion/static/html/student_view.html'
         self.setup_db()
-        html = self.resource_string('./static/html/student_view.html')
+        html = self.remote_resource_string(html_url)
         frag = Fragment(unicode(html).format(self=self,comment=self.comment))
-        css = self.resource_string('./static/css/discussion_dance.css')
+        css = self.remote_resource_string(css_url)
         frag.add_css(unicode(css))
-        js = self.resource_string('./static/js/discussion_dance.js')
+        js = self.remote_resource_string(js_url)
         frag.add_javascript(unicode(js))
         frag.initialize_js('discussion_dance')
         return frag
